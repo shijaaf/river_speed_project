@@ -24,6 +24,8 @@ from src.video_info import build_dataset_overview
 from src.preprocess import extract_preprocessed_frames
 from src.optical_flow_features import build_feature_dataset
 from src.config import RESULTS_DIR
+# ---------phase4
+from src.train_ml_model import run_ml_training
 
 
 def test_libraries():
@@ -157,8 +159,18 @@ def phase3_optical_flow_features():
     print(f"Feature dataset saved to: {output_path}")
 
 
+def phase4_train_ml_model():
+    """
+    Run phase 4:
+    Train and evaluate Machine Learning model.
+    """
+
+    run_ml_training()
+
+
 if __name__ == "__main__":
     # test_libraries()
     # phase1_dataset_overview()
     # phase2_preprocess()
-    phase3_optical_flow_features()
+    # phase3_optical_flow_features()
+    phase4_train_ml_model()

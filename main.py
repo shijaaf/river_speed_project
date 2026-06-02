@@ -26,6 +26,8 @@ from src.optical_flow_features import build_feature_dataset
 from src.config import RESULTS_DIR
 # ---------phase4
 from src.train_ml_model import run_ml_training
+# ---------phase5
+from src.train_dl_model import run_dl_training
 
 
 def test_libraries():
@@ -168,9 +170,19 @@ def phase4_train_ml_model():
     run_ml_training()
 
 
+def phase5_train_dl_model():
+    """
+    Run phase 5:
+    Train and evaluate Deep Learning model.
+    """
+
+    run_dl_training()
+
+
 if __name__ == "__main__":
     # test_libraries()
     # phase1_dataset_overview()
     # phase2_preprocess()
     # phase3_optical_flow_features()
-    phase4_train_ml_model()
+    # phase4_train_ml_model()
+    phase5_train_dl_model()

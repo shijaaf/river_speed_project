@@ -1,0 +1,11 @@
+.venv/
+__pycache__/
+*.pyc
+
+data/videos/
+outputs/frames/
+outputs/logs/
+outputs/results/
+outputs/models/
+
+.idea/

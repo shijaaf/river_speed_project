@@ -9,14 +9,20 @@ import numpy as np
 import pandas as pd
 import sklearn
 import torch
-# ---------
+# ---------phase1
 from src.read_labels import read_labels
 from src.video_info import build_dataset_overview
 from src.config import RESULTS_DIR
-# ---------
+# ---------phase2
 from src.read_labels import read_labels
 from src.video_info import build_dataset_overview
 from src.preprocess import extract_preprocessed_frames, save_sample_frames
+from src.config import RESULTS_DIR
+# ---------phase3
+from src.read_labels import read_labels
+from src.video_info import build_dataset_overview
+from src.preprocess import extract_preprocessed_frames
+from src.optical_flow_features import build_feature_dataset
 from src.config import RESULTS_DIR
 
 
@@ -121,7 +127,38 @@ def phase2_preprocess():
         print(f"{dataset_name}: {len(frames)} frames extracted.")
 
 
+def phase3_optical_flow_features():
+    """
+    Run phase 3:
+    1. Read labels
+    2. Build dataset overview
+    3. Extract optical flow features
+    4. Save feature dataset
+    """
+
+    RESULTS_DIR.mkdir(parents=True, exist_ok=True)
+
+    labels_df = read_labels()
+
+    overview_df = build_dataset_overview(labels_df)
+
+    feature_df = build_feature_dataset(
+        overview_df=overview_df,
+        frame_extractor_function=extract_preprocessed_frames
+    )
+
+    print("Optical flow feature dataset:")
+    print(feature_df)
+
+    output_path = RESULTS_DIR / "phase3_optical_flow_features.csv"
+
+    feature_df.to_csv(output_path, index=False)
+
+    print(f"Feature dataset saved to: {output_path}")
+
+
 if __name__ == "__main__":
     # test_libraries()
     # phase1_dataset_overview()
-    phase2_preprocess()
+    # phase2_preprocess()
+    phase3_optical_flow_features()

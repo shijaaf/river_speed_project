@@ -9,12 +9,19 @@ import numpy as np
 import pandas as pd
 import sklearn
 import torch
+# ---------
+from src.read_labels import read_labels
+from src.video_info import build_dataset_overview
+from src.config import RESULTS_DIR
+# ---------
+from src.read_labels import read_labels
+from src.video_info import build_dataset_overview
+from src.preprocess import extract_preprocessed_frames, save_sample_frames
+from src.config import RESULTS_DIR
 
 
-def main():
-    """
-    Print installed package versions to verify the environment setup.
-    """
+def test_libraries():
+    # Print installed package versions to verify the environment setup.
 
     print("River Speed Estimation Project")
     print("--------------------------------")
@@ -33,5 +40,88 @@ def main():
         print("CUDA is not available. CPU will be used.")
 
 
+def phase1_dataset_overview():
+    """
+    Run phase 1:
+    1. Read labels
+    2. Check video files
+    3. Save dataset overview
+    """
+
+    RESULTS_DIR.mkdir(parents=True, exist_ok=True)
+
+    labels_df = read_labels()
+
+    print("Labels loaded successfully.")
+    print(labels_df)
+
+    overview_df = build_dataset_overview(labels_df)
+
+    print("\nDataset overview:")
+    print(overview_df)
+
+    # save CSV
+    output_path = RESULTS_DIR / "phase1_dataset_overview.csv"
+    overview_df.to_csv(output_path, index=False)
+
+    # save TXT
+    text_output = RESULTS_DIR / "phase1_dataset_overview.txt"
+
+    with open(text_output, "w", encoding="utf-8") as f:
+        f.write("Labels loaded successfully.\n\n")
+        f.write(labels_df.to_string())
+
+        f.write("\n\nDataset overview:\n\n")
+        f.write(overview_df.to_string())
+
+        f.write(f"\n\nDataset overview saved to: {output_path}\n")
+
+    print(f"\nDataset overview saved to: {output_path}")
+    print(f"Text report saved to: {text_output}")
+
+
+def phase2_preprocess():
+    """
+    Run phase 2:
+    1. Read labels
+    2. Read dataset overview
+    3. Extract preprocessed frames
+    4. Save sample frames
+    """
+
+    RESULTS_DIR.mkdir(parents=True, exist_ok=True)
+
+    labels_df = read_labels()
+    overview_df = build_dataset_overview(labels_df)
+
+    for _, row in overview_df.iterrows():
+        dataset_name = row["dataset_name"]
+        video_path = row["video_path"]
+
+        if not row["video_exists"]:
+            print(f"Video not found: {dataset_name}")
+            continue
+
+        if not row["is_readable"]:
+            print(f"Video is not readable: {dataset_name}")
+            continue
+
+        frames = extract_preprocessed_frames(
+            video_path=video_path,
+            dataset_name=dataset_name,
+            max_frames=None
+        )
+
+        save_sample_frames(
+            frames=frames,
+            dataset_name=dataset_name,
+            max_samples=5
+        )
+
+        print(f"{dataset_name}: {len(frames)} frames extracted.")
+
+
 if __name__ == "__main__":
-    main()
+    # test_libraries()
+    # phase1_dataset_overview()
+    phase2_preprocess()

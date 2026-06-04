@@ -1,8 +1,22 @@
+from pathlib import Path
 import cv2
 import numpy as np
 import pandas as pd
 from tqdm import tqdm
 
+
+VIDEO_START_SECONDS = {
+    "1_Castor_Canada": 3.0,
+    "3_Castor_Canada": 3.0,
+    "2_Castor_Canada": 3.0,
+    "AlpineStabilised": 3.0,
+}
+
+ROI_TOP_RATIO = 0.20
+ROI_BOTTOM_RATIO = 0.85
+
+ROI_LEFT_RATIO = 0.05
+ROI_RIGHT_RATIO = 0.95
 
 MAX_CORNERS = 300
 QUALITY_LEVEL = 0.01
@@ -23,23 +37,74 @@ FRAME_STEP = 1
 MAX_FRAMES = 300
 
 
+def apply_water_roi(frame):
+    """
+    Keep only the central water area.
+    """
+
+    height, width = frame.shape
+
+    top = int(height * ROI_TOP_RATIO)
+    bottom = int(height * ROI_BOTTOM_RATIO)
+
+    left = int(width * ROI_LEFT_RATIO)
+    right = int(width * ROI_RIGHT_RATIO)
+
+    roi_frame = frame[top:bottom, left:right]
+
+    return roi_frame
+
+
+def save_roi_preview(frame, dataset_name):
+    """
+    Save one ROI image for visual inspection.
+    """
+
+    import os
+
+    output_dir = "outputs/roi_preview"
+
+    os.makedirs(
+        output_dir,
+        exist_ok=True
+    )
+
+    output_path = (
+        f"{output_dir}/{dataset_name}.png"
+    )
+
+    cv2.imwrite(
+        output_path,
+        frame
+    )
+
+
 def preprocess_tracking_frame(frame):
+
+    resized_frame = cv2.resize(
+        frame,
+        (RESIZE_WIDTH, RESIZE_HEIGHT)
+    )
+
+    gray_frame = cv2.cvtColor(
+        resized_frame,
+        cv2.COLOR_BGR2GRAY
+    )
+
+    enhanced_frame = cv2.equalizeHist(
+        gray_frame
+    )
+
+    roi_frame = apply_water_roi(
+        enhanced_frame
+    )
+
+    return roi_frame
+
+
+def read_tracking_frames(video_path, dataset_name, fps, max_frames=MAX_FRAMES):
     """
-    Convert input frame to a grayscale resized frame for feature tracking.
-    """
-
-    resized_frame = cv2.resize(frame, (RESIZE_WIDTH, RESIZE_HEIGHT))
-
-    gray_frame = cv2.cvtColor(resized_frame, cv2.COLOR_BGR2GRAY)
-
-    enhanced_frame = cv2.equalizeHist(gray_frame)
-
-    return enhanced_frame
-
-
-def read_tracking_frames(video_path, max_frames=MAX_FRAMES):
-    """
-    Read video frames for tracking.
+    Read video frames for tracking and skip corrupted initial seconds if needed.
     """
 
     frames = []
@@ -49,7 +114,11 @@ def read_tracking_frames(video_path, max_frames=MAX_FRAMES):
     if not cap.isOpened():
         raise ValueError(f"Could not open video: {video_path}")
 
-    frame_index = 0
+    start_second = VIDEO_START_SECONDS.get(dataset_name, 0.0)
+
+    start_frame = int(start_second * fps)
+
+    cap.set(cv2.CAP_PROP_POS_FRAMES, start_frame)
 
     while True:
         ret, frame = cap.read()
@@ -57,11 +126,9 @@ def read_tracking_frames(video_path, max_frames=MAX_FRAMES):
         if not ret:
             break
 
-        if frame_index % FRAME_STEP == 0:
-            processed_frame = preprocess_tracking_frame(frame)
-            frames.append(processed_frame)
+        processed_frame = preprocess_tracking_frame(frame)
 
-        frame_index += 1
+        frames.append(processed_frame)
 
         if len(frames) >= max_frames:
             break
@@ -154,7 +221,11 @@ def extract_klt_features_from_video(video_path, fps):
     Extract KLT tracking features from one video.
     """
 
-    frames = read_tracking_frames(video_path)
+    frames = read_tracking_frames(
+        video_path=video_path,
+        dataset_name=Path(video_path).stem,
+        fps=fps
+    )
 
     if len(frames) < 2:
         return None

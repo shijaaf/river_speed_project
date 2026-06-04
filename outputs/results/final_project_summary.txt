@@ -1,0 +1,41 @@
+گزارش خلاصه نهایی پروژه تخمین سرعت جریان آب رودخانه
+============================================================
+
+روش نهایی انتخاب‌شده:
+Hybrid Feature Fusion + ExtraTrees Regressor
+
+دلیل انتخاب روش:
+در این پروژه چند روش شامل Optical Flow ساده، KLT Tracking، ویژگی‌های پیشرفته حرکتی و ترکیب ویژگی‌ها بررسی شد. بهترین نتیجه با ترکیب ویژگی‌های Phase 6 و Phase 9 به دست آمد.
+
+بهترین مدل:
+ExtraTrees
+
+معیارهای ارزیابی:
+MAE: 0.4072
+RMSE: 0.9616
+R2: 0.3678
+MAPE: 52.0011
+
+تحلیل خطا:
+میانگین خطا: 0.4072 m/s
+بیشترین خطا: 4.3143 m/s
+بدترین نمونه: StJulien
+
+مهم‌ترین ویژگی‌ها:
+flow_y_abs_mean: 0.2678
+mag_median: 0.2294
+flow_y_std: 0.1677
+mag_mean: 0.0610
+mag_p90: 0.0512
+mag_p95: 0.0505
+mag_median_max: 0.0315
+motion_per_second_p90: 0.0277
+mag_median_median: 0.0249
+motion_per_second_mean: 0.0234
+
+مشخصات سیستم مورد استفاده:
+CPU: Intel Core i7-8750H
+GPU: NVIDIA GeForce GTX 1050 4GB
+RAM: 8GB
+OS: Windows 11
+Python: 3.12

@@ -28,6 +28,13 @@ from src.config import RESULTS_DIR
 from src.train_ml_model import run_ml_training
 # ---------phase5
 from src.train_dl_model import run_dl_training
+# ---------phase6
+from src.read_labels import read_labels
+from src.video_info import build_dataset_overview
+from src.preprocess import extract_preprocessed_frames
+from src.improved_features import build_improved_feature_dataset
+from src.train_improved_model import run_improved_training
+from src.config import RESULTS_DIR
 
 
 def test_libraries():
@@ -179,10 +186,39 @@ def phase5_train_dl_model():
     run_dl_training()
 
 
+def phase6_improve_training():
+    """
+        Run phase 6:
+        1. Build improved features
+        2. Save improved feature dataset
+        3. Train improved ensemble models
+        """
+
+    RESULTS_DIR.mkdir(parents=True, exist_ok=True)
+
+    labels_df = read_labels()
+
+    overview_df = build_dataset_overview(labels_df)
+
+    improved_feature_df = build_improved_feature_dataset(
+        overview_df=overview_df,
+        frame_extractor_function=extract_preprocessed_frames
+    )
+
+    feature_path = RESULTS_DIR / "phase6_improved_features.csv"
+
+    improved_feature_df.to_csv(feature_path, index=False)
+
+    print(f"Improved features saved to: {feature_path}")
+
+    run_improved_training()
+
+
 if __name__ == "__main__":
     # test_libraries()
     # phase1_dataset_overview()
     # phase2_preprocess()
     # phase3_optical_flow_features()
     # phase4_train_ml_model()
-    phase5_train_dl_model()
+    # phase5_train_dl_model()
+    phase6_improve_training()

@@ -41,6 +41,9 @@ from src.tracking_features import build_klt_feature_dataset
 
 from src.advanced_motion_features import build_advanced_feature_dataset
 
+# deep learning method
+from src.deep_feature_extraction import build_deep_feature_dataset
+
 
 def test_libraries():
     # Print installed package versions to verify the environment setup.
@@ -276,6 +279,38 @@ def phase9_advanced_motion_features():
     print(f"Advanced motion features saved to: {output_path}")
 
 
+def phase13_deep_feature_extraction():
+    """
+    Run phase 13:
+    1. Read labels
+    2. Build dataset overview
+    3. Extract pretrained ResNet18 deep features
+    4. Save deep feature dataset
+    """
+
+    RESULTS_DIR.mkdir(parents=True, exist_ok=True)
+
+    labels_df = read_labels()
+
+    overview_df = build_dataset_overview(labels_df)
+
+    deep_feature_df = build_deep_feature_dataset(
+        overview_df=overview_df
+    )
+
+    output_path = RESULTS_DIR / "phase13_deep_features.csv"
+
+    deep_feature_df.to_csv(
+        output_path,
+        index=False
+    )
+
+    print("Deep feature dataset:")
+    print(deep_feature_df)
+
+    print(f"Deep features saved to: {output_path}")
+
+
 if __name__ == "__main__":
     # test_libraries()
     # phase1_dataset_overview()
@@ -285,4 +320,5 @@ if __name__ == "__main__":
     # phase5_train_dl_model()
     # phase6_improve_training()
     # phase7_klt_tracking_features()
-    phase9_advanced_motion_features()
+    # phase9_advanced_motion_features()
+    phase13_deep_feature_extraction()

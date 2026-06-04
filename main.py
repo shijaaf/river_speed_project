@@ -39,6 +39,8 @@ from src.config import RESULTS_DIR
 # new pipeline - phase7
 from src.tracking_features import build_klt_feature_dataset
 
+from src.advanced_motion_features import build_advanced_feature_dataset
+
 
 def test_libraries():
     # Print installed package versions to verify the environment setup.
@@ -244,6 +246,36 @@ def phase7_klt_tracking_features():
     print(f"KLT tracking features saved to: {output_path}")
 
 
+def phase9_advanced_motion_features():
+    """
+    Run phase 9:
+    1. Read labels
+    2. Build dataset overview
+    3. Extract advanced dense motion features
+    4. Save feature dataset
+    """
+
+    RESULTS_DIR.mkdir(parents=True, exist_ok=True)
+
+    labels_df = read_labels()
+
+    overview_df = build_dataset_overview(labels_df)
+
+    advanced_feature_df = build_advanced_feature_dataset(
+        overview_df=overview_df,
+        frame_extractor_function=extract_preprocessed_frames
+    )
+
+    output_path = RESULTS_DIR / "phase9_advanced_motion_features.csv"
+
+    advanced_feature_df.to_csv(output_path, index=False)
+
+    print("Advanced motion feature dataset:")
+    print(advanced_feature_df)
+
+    print(f"Advanced motion features saved to: {output_path}")
+
+
 if __name__ == "__main__":
     # test_libraries()
     # phase1_dataset_overview()
@@ -252,4 +284,5 @@ if __name__ == "__main__":
     # phase4_train_ml_model()
     # phase5_train_dl_model()
     # phase6_improve_training()
-    phase7_klt_tracking_features()
+    # phase7_klt_tracking_features()
+    phase9_advanced_motion_features()

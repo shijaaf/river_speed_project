@@ -35,6 +35,9 @@ from src.preprocess import extract_preprocessed_frames
 from src.improved_features import build_improved_feature_dataset
 from src.train_improved_model import run_improved_training
 from src.config import RESULTS_DIR
+# ==========================
+# new pipeline - phase7
+from src.tracking_features import build_klt_feature_dataset
 
 
 def test_libraries():
@@ -214,6 +217,33 @@ def phase6_improve_training():
     run_improved_training()
 
 
+def phase7_klt_tracking_features():
+    """
+    Run phase 7:
+    1. Read labels
+    2. Build dataset overview
+    3. Extract KLT tracking features
+    4. Save feature dataset
+    """
+
+    RESULTS_DIR.mkdir(parents=True, exist_ok=True)
+
+    labels_df = read_labels()
+
+    overview_df = build_dataset_overview(labels_df)
+
+    klt_feature_df = build_klt_feature_dataset(overview_df)
+
+    output_path = RESULTS_DIR / "phase7_klt_tracking_features.csv"
+
+    klt_feature_df.to_csv(output_path, index=False)
+
+    print("KLT tracking feature dataset:")
+    print(klt_feature_df)
+
+    print(f"KLT tracking features saved to: {output_path}")
+
+
 if __name__ == "__main__":
     # test_libraries()
     # phase1_dataset_overview()
@@ -221,4 +251,5 @@ if __name__ == "__main__":
     # phase3_optical_flow_features()
     # phase4_train_ml_model()
     # phase5_train_dl_model()
-    phase6_improve_training()
+    # phase6_improve_training()
+    phase7_klt_tracking_features()

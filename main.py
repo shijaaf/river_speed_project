@@ -339,21 +339,21 @@ def phase17_train_tuned_ensemble_model():
 
 
 if __name__ == "__main__":
-    # run_phase_with_timer("test_libraries", test_libraries)
+    run_phase_with_timer("test_libraries", test_libraries)
 
-    # run_phase_with_timer("phase1_dataset_overview", phase1_dataset_overview)
-    # run_phase_with_timer("phase2_preprocess", phase2_preprocess)
-    # run_phase_with_timer("phase3_optical_flow_features", phase3_optical_flow_features)
+    run_phase_with_timer("phase1_dataset_overview", phase1_dataset_overview)
+    run_phase_with_timer("phase2_preprocess", phase2_preprocess)
+    run_phase_with_timer("phase3_optical_flow_features", phase3_optical_flow_features)
 
-    # run_phase_with_timer("phase4_train_ml_model", phase4_train_ml_model)
-    # run_phase_with_timer("phase5_train_dl_model", phase5_train_dl_model)
+    run_phase_with_timer("phase4_train_ml_model", phase4_train_ml_model)
+    run_phase_with_timer("phase5_train_dl_model", phase5_train_dl_model)
 
-    # run_phase_with_timer("phase6_improve_training", phase6_improve_training)
+    run_phase_with_timer("phase6_improve_training", phase6_improve_training)
 
-    # run_phase_with_timer("phase7_klt_tracking_features", phase7_klt_tracking_features)
-    # run_phase_with_timer("phase8_train_klt_models", phase8_train_klt_models)
-    #
-    # run_phase_with_timer("phase9_advanced_motion_features", phase9_advanced_motion_features)
+    run_phase_with_timer("phase7_klt_tracking_features", phase7_klt_tracking_features)
+    run_phase_with_timer("phase8_train_klt_models", phase8_train_klt_models)
+
+    run_phase_with_timer("phase9_advanced_motion_features", phase9_advanced_motion_features)
     run_phase_with_timer("phase10_train_advanced_motion_model", phase10_train_advanced_motion_model)
 
     run_phase_with_timer("phase11_train_hybrid_model", phase11_train_hybrid_model)

@@ -1,190 +1,126 @@
-import cv2
 import numpy as np
 import pandas as pd
-from tqdm import tqdm
+
+from src.video_feature_utils import (
+    calculate_entropy,
+    calculate_farneback_flow,
+    iter_valid_videos,
+    summarize_frame_feature_rows,
+)
 
 
-def calculate_entropy(values, bins=20):
-    """
-    Calculate entropy of numeric values.
-    """
-
-    hist, _ = np.histogram(
-        values,
-        bins=bins
-    )
-
-    hist = hist.astype(float)
-
-    hist = hist / (hist.sum() + 1e-8)
-
-    entropy = -np.sum(
-        hist * np.log2(hist + 1e-8)
-    )
-
-    return entropy
+ACTIVE_PERCENTILE = 80
+HIGH_PERCENTILE = 95
 
 
 def calculate_flow(prev_frame, next_frame):
-    """
-    Calculate dense optical flow between two grayscale frames.
-    """
-
-    flow = cv2.calcOpticalFlowFarneback(
-        prev=prev_frame,
-        next=next_frame,
-        flow=None,
-        pyr_scale=0.5,
-        levels=3,
-        winsize=15,
-        iterations=3,
-        poly_n=5,
-        poly_sigma=1.2,
-        flags=0
-    )
-
-    magnitude, angle = cv2.cartToPolar(
-        flow[..., 0],
-        flow[..., 1]
+    _, _, magnitude, angle = calculate_farneback_flow(
+        prev_frame=prev_frame,
+        next_frame=next_frame,
     )
 
     return magnitude, angle
 
 
+def calculate_direction_consistency(angle, active_mask):
+    active_angles = angle[active_mask]
+
+    if len(active_angles) == 0:
+        return 0.0
+
+    cos_mean = np.cos(active_angles).mean()
+    sin_mean = np.sin(active_angles).mean()
+
+    return cos_mean ** 2 + sin_mean ** 2
+
+
+def extract_single_pair_features(magnitude, angle):
+    active_threshold = np.percentile(magnitude, ACTIVE_PERCENTILE)
+    high_threshold = np.percentile(magnitude, HIGH_PERCENTILE)
+
+    active_mask = magnitude > active_threshold
+    active_values = magnitude[active_mask]
+
+    if len(active_values) == 0:
+        return None
+
+    return {
+        "mag_mean": np.mean(magnitude),
+        "mag_median": np.median(magnitude),
+        "mag_std": np.std(magnitude),
+        "mag_p75": np.percentile(magnitude, 75),
+        "mag_p90": np.percentile(magnitude, 90),
+        "mag_p95": np.percentile(magnitude, 95),
+
+        "active_mag_mean": np.mean(active_values),
+        "active_mag_median": np.median(active_values),
+        "active_mag_std": np.std(active_values),
+
+        "active_motion_ratio": active_mask.mean(),
+        "high_motion_ratio": (magnitude > high_threshold).mean(),
+
+        "motion_energy": np.mean(magnitude ** 2),
+        "active_motion_energy": np.mean(active_values ** 2),
+
+        "direction_consistency": calculate_direction_consistency(
+            angle=angle,
+            active_mask=active_mask,
+        ),
+
+        "motion_entropy": calculate_entropy(magnitude.flatten()),
+        "active_motion_entropy": calculate_entropy(active_values.flatten()),
+    }
+
+
 def extract_motion_features(frames):
-    """
-    Extract advanced dense motion features from preprocessed frames.
-    """
+    if frames is None or len(frames) < 2:
+        return None
 
     frame_features = []
 
-    for i in range(len(frames) - 1):
-
+    for index in range(len(frames) - 1):
         magnitude, angle = calculate_flow(
-            frames[i],
-            frames[i + 1]
+            prev_frame=frames[index],
+            next_frame=frames[index + 1],
         )
 
-        active_threshold = np.percentile(
-            magnitude,
-            80
+        features = extract_single_pair_features(
+            magnitude=magnitude,
+            angle=angle,
         )
 
-        high_threshold = np.percentile(
-            magnitude,
-            95
-        )
-
-        active_mask = magnitude > active_threshold
-
-        active_values = magnitude[active_mask]
-
-        if len(active_values) == 0:
-            continue
-
-        active_motion_ratio = active_mask.mean()
-
-        high_motion_ratio = (
-            magnitude > high_threshold
-        ).mean()
-
-        motion_energy = np.mean(
-            magnitude ** 2
-        )
-
-        active_motion_energy = np.mean(
-            active_values ** 2
-        )
-
-        direction_consistency = (
-            np.cos(angle[active_mask]).mean() ** 2
-            +
-            np.sin(angle[active_mask]).mean() ** 2
-        )
-
-        motion_entropy = calculate_entropy(
-            magnitude.flatten()
-        )
-
-        active_motion_entropy = calculate_entropy(
-            active_values.flatten()
-        )
-
-        frame_features.append({
-            "mag_mean": np.mean(magnitude),
-            "mag_median": np.median(magnitude),
-            "mag_std": np.std(magnitude),
-            "mag_p75": np.percentile(magnitude, 75),
-            "mag_p90": np.percentile(magnitude, 90),
-            "mag_p95": np.percentile(magnitude, 95),
-
-            "active_mag_mean": np.mean(active_values),
-            "active_mag_median": np.median(active_values),
-            "active_mag_std": np.std(active_values),
-
-            "active_motion_ratio": active_motion_ratio,
-            "high_motion_ratio": high_motion_ratio,
-
-            "motion_energy": motion_energy,
-            "active_motion_energy": active_motion_energy,
-
-            "direction_consistency": direction_consistency,
-
-            "motion_entropy": motion_entropy,
-            "active_motion_entropy": active_motion_entropy
-        })
+        if features is not None:
+            frame_features.append(features)
 
     if len(frame_features) == 0:
         return None
 
-    feature_df = pd.DataFrame(frame_features)
-
-    final_features = {}
-
-    for column in feature_df.columns:
-
-        final_features[f"{column}_mean"] = feature_df[column].mean()
-        final_features[f"{column}_median"] = feature_df[column].median()
-        final_features[f"{column}_std"] = feature_df[column].std()
-        final_features[f"{column}_min"] = feature_df[column].min()
-        final_features[f"{column}_max"] = feature_df[column].max()
-
-    final_features["processed_flow_pairs"] = len(feature_df)
+    final_features = summarize_frame_feature_rows(frame_features)
+    final_features["processed_flow_pairs"] = len(frame_features)
 
     return final_features
 
 
 def build_advanced_feature_dataset(overview_df, frame_extractor_function):
-    """
-    Build advanced dense motion feature dataset for all videos.
-    """
-
     rows = []
 
-    for _, row in tqdm(
-        overview_df.iterrows(),
-        total=len(overview_df),
-        desc="Extracting advanced motion features"
+    for row in iter_valid_videos(
+        overview_df=overview_df,
+        desc="Extracting advanced motion features",
     ):
         dataset_name = row["dataset_name"]
-
-        if not row["video_exists"] or not row["is_readable"]:
-            print(f"Skipping invalid video: {dataset_name}")
-            continue
 
         frames = frame_extractor_function(
             video_path=row["video_path"],
             dataset_name=dataset_name,
-            max_frames=None
+            max_frames=None,
         )
 
-        if len(frames) < 2:
+        if frames is None or len(frames) < 2:
             print(f"Skipping video with insufficient frames: {dataset_name}")
             continue
 
-        features = extract_motion_features(
-            frames=frames
-        )
+        features = extract_motion_features(frames)
 
         if features is None:
             print(f"No valid motion features extracted: {dataset_name}")

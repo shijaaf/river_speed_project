@@ -1,79 +1,44 @@
-import os
 import joblib
-import numpy as np
-import pandas as pd
 import matplotlib.pyplot as plt
+import pandas as pd
 
-from sklearn.feature_selection import SelectKBest, f_regression
 from sklearn.ensemble import ExtraTreesRegressor
+from sklearn.feature_selection import SelectKBest, f_regression
+
+from src.config import (
+    MODELS_DIR,
+    PHASE6_FEATURE_FILE,
+    PHASE9_ADVANCED_FEATURE_FILE,
+    RESULTS_DIR,
+)
+from src.modeling_utils import load_merged_feature_dataset, split_features_target
 
 
-PHASE6_FILE = "outputs/results/phase6_improved_features.csv"
-PHASE9_FILE = "outputs/results/phase9_advanced_motion_features.csv"
-PHASE11_PREDICTIONS_FILE = "outputs/results/phase11_hybrid_predictions.xlsx"
-PHASE11_METRICS_FILE = "outputs/results/phase11_hybrid_metrics.csv"
+PHASE11_PREDICTIONS_FILE = RESULTS_DIR / "phase11_hybrid_predictions.xlsx"
+PHASE11_METRICS_FILE = RESULTS_DIR / "phase11_hybrid_metrics.csv"
 
-FINAL_MODEL_FILE = "outputs/models/final_hybrid_extratrees_model.pkl"
-FINAL_TABLE_FILE = "outputs/results/final_prediction_table.xlsx"
-FEATURE_IMPORTANCE_FILE = "outputs/results/final_feature_importance.csv"
-FINAL_REPORT_FILE = "outputs/results/final_project_summary.txt"
+FINAL_MODEL_FILE = MODELS_DIR / "final_hybrid_extratrees_model.pkl"
+FINAL_TABLE_FILE = RESULTS_DIR / "final_prediction_table.xlsx"
+FEATURE_IMPORTANCE_FILE = RESULTS_DIR / "final_feature_importance.csv"
+FINAL_REPORT_FILE = RESULTS_DIR / "final_project_summary.txt"
 
-ERROR_PLOT_FILE = "outputs/results/final_error_plot.png"
-TRUE_VS_PRED_FILE = "outputs/results/final_true_vs_predicted.png"
+ERROR_PLOT_FILE = RESULTS_DIR / "final_error_plot.png"
+TRUE_VS_PRED_FILE = RESULTS_DIR / "final_true_vs_predicted.png"
 
 
 def load_hybrid_dataset():
-    """
-    Load and merge Phase 6 and Phase 9 feature datasets.
-    """
-
-    phase6_df = pd.read_csv(PHASE6_FILE)
-
-    phase9_df = pd.read_csv(PHASE9_FILE)
-
-    phase9_df = phase9_df.drop(
-        columns=["real_speed"],
-        errors="ignore"
-    )
-
-    hybrid_df = pd.merge(
-        phase6_df,
-        phase9_df,
-        on="dataset_name",
-        how="inner"
-    )
-
-    hybrid_df["real_speed"] = pd.to_numeric(
-        hybrid_df["real_speed"],
-        errors="coerce"
-    )
-
-    hybrid_df = hybrid_df.dropna(
-        subset=["real_speed"]
-    ).reset_index(drop=True)
-
-    return hybrid_df
+    return load_merged_feature_dataset([
+        PHASE6_FEATURE_FILE,
+        PHASE9_ADVANCED_FEATURE_FILE,
+    ])
 
 
 def train_final_model(df):
-    """
-    Train final ExtraTrees model on the full labeled dataset.
-    """
-
-    dataset_names = df["dataset_name"]
-
-    y = df["real_speed"]
-
-    X = df.drop(
-        columns=[
-            "dataset_name",
-            "real_speed"
-        ]
-    )
+    X, y, dataset_names = split_features_target(df)
 
     selector = SelectKBest(
         score_func=f_regression,
-        k=min(15, X.shape[1])
+        k=min(15, X.shape[1]),
     )
 
     X_selected = selector.fit_transform(X, y)
@@ -86,51 +51,43 @@ def train_final_model(df):
         n_estimators=700,
         max_depth=4,
         min_samples_leaf=2,
-        random_state=42
+        random_state=42,
     )
 
     model.fit(X_selected, y)
 
-    return model, selector, selected_features, X_selected, y, dataset_names
+    return model, selector, selected_features
 
 
 def save_final_model(model, selector, selected_features):
-    """
-    Save final trained model and feature selector.
-    """
-
-    os.makedirs("outputs/models", exist_ok=True)
+    MODELS_DIR.mkdir(parents=True, exist_ok=True)
 
     joblib.dump(
         {
             "model": model,
             "selector": selector,
-            "selected_features": list(selected_features)
+            "selected_features": list(selected_features),
         },
-        FINAL_MODEL_FILE
+        FINAL_MODEL_FILE,
     )
 
     print(f"Final model saved to: {FINAL_MODEL_FILE}")
 
 
 def save_feature_importance(model, selected_features):
-    """
-    Save feature importance table.
-    """
-
     importance_df = pd.DataFrame({
         "feature": selected_features,
-        "importance": model.feature_importances_
+        "importance": model.feature_importances_,
     })
 
     importance_df = importance_df.sort_values(
         "importance",
-        ascending=False
+        ascending=False,
     )
 
     importance_df.to_csv(
         FEATURE_IMPORTANCE_FILE,
-        index=False
+        index=False,
     )
 
     print(f"Feature importance saved to: {FEATURE_IMPORTANCE_FILE}")
@@ -139,15 +96,11 @@ def save_feature_importance(model, selected_features):
 
 
 def save_final_prediction_table():
-    """
-    Copy Phase 11 best prediction table as final project output table.
-    """
-
     prediction_df = pd.read_excel(PHASE11_PREDICTIONS_FILE)
 
     prediction_df.to_excel(
         FINAL_TABLE_FILE,
-        index=False
+        index=False,
     )
 
     print(f"Final prediction table saved to: {FINAL_TABLE_FILE}")
@@ -156,15 +109,11 @@ def save_final_prediction_table():
 
 
 def plot_error(prediction_df):
-    """
-    Plot absolute prediction error for each dataset.
-    """
-
     plt.figure(figsize=(12, 6))
 
     plt.bar(
         prediction_df["نام دیتاست"],
-        prediction_df["میزان خطا"]
+        prediction_df["میزان خطا"],
     )
 
     plt.xticks(rotation=90)
@@ -176,17 +125,12 @@ def plot_error(prediction_df):
     plt.tight_layout()
 
     plt.savefig(ERROR_PLOT_FILE, dpi=300)
-
     plt.close()
 
     print(f"Error plot saved to: {ERROR_PLOT_FILE}")
 
 
 def plot_true_vs_predicted(prediction_df):
-    """
-    Plot true speed values against predicted speed values.
-    """
-
     y_true = prediction_df["مقدار واقعی"]
     y_pred = prediction_df["مقدار پیشبینی شده"]
 
@@ -199,7 +143,7 @@ def plot_true_vs_predicted(prediction_df):
 
     plt.plot(
         [min_value, max_value],
-        [min_value, max_value]
+        [min_value, max_value],
     )
 
     plt.xlabel("Real Speed (m/s)")
@@ -209,17 +153,12 @@ def plot_true_vs_predicted(prediction_df):
     plt.tight_layout()
 
     plt.savefig(TRUE_VS_PRED_FILE, dpi=300)
-
     plt.close()
 
     print(f"True vs predicted plot saved to: {TRUE_VS_PRED_FILE}")
 
 
 def save_summary_report(metrics_df, prediction_df, importance_df):
-    """
-    Save a short Persian final summary report.
-    """
-
     best_row = metrics_df.sort_values("MAE").iloc[0]
 
     mean_error = prediction_df["میزان خطا"].mean()
@@ -227,7 +166,7 @@ def save_summary_report(metrics_df, prediction_df, importance_df):
 
     worst_sample = prediction_df.sort_values(
         "میزان خطا",
-        ascending=False
+        ascending=False,
     ).iloc[0]
 
     with open(FINAL_REPORT_FILE, "w", encoding="utf-8") as file:
@@ -250,9 +189,15 @@ def save_summary_report(metrics_df, prediction_df, importance_df):
 
         file.write("معیارهای ارزیابی:\n")
         file.write(f"MAE: {best_row['MAE']:.4f}\n")
-        file.write(f"RMSE: {best_row['RMSE']:.4f}\n")
-        file.write(f"R2: {best_row['R2']:.4f}\n")
-        file.write(f"MAPE: {best_row['MAPE']:.4f}\n\n")
+
+        if "RMSE" in best_row:
+            file.write(f"RMSE: {best_row['RMSE']:.4f}\n")
+
+        if "R2" in best_row:
+            file.write(f"R2: {best_row['R2']:.4f}\n")
+
+        if "MAPE" in best_row:
+            file.write(f"MAPE: {best_row['MAPE']:.4f}\n\n")
 
         file.write("تحلیل خطا:\n")
         file.write(f"میانگین خطا: {mean_error:.4f} m/s\n")
@@ -276,28 +221,22 @@ def save_summary_report(metrics_df, prediction_df, importance_df):
 
 
 def main():
-    """
-    Run Phase 12 finalization pipeline.
-    """
-
-    os.makedirs("outputs/results", exist_ok=True)
-    os.makedirs("outputs/models", exist_ok=True)
+    RESULTS_DIR.mkdir(parents=True, exist_ok=True)
+    MODELS_DIR.mkdir(parents=True, exist_ok=True)
 
     hybrid_df = load_hybrid_dataset()
 
-    model, selector, selected_features, X_selected, y, dataset_names = train_final_model(
-        hybrid_df
-    )
+    model, selector, selected_features = train_final_model(hybrid_df)
 
     save_final_model(
         model=model,
         selector=selector,
-        selected_features=selected_features
+        selected_features=selected_features,
     )
 
     importance_df = save_feature_importance(
         model=model,
-        selected_features=selected_features
+        selected_features=selected_features,
     )
 
     prediction_df = save_final_prediction_table()
@@ -311,7 +250,7 @@ def main():
     save_summary_report(
         metrics_df=metrics_df,
         prediction_df=prediction_df,
-        importance_df=importance_df
+        importance_df=importance_df,
     )
 
     print("Phase 12 completed successfully.")

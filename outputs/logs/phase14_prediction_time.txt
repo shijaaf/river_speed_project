@@ -1,0 +1,7 @@
+Phase 14 Deep Feature Model Prediction Time Report
+============================================================
+
+Total samples/videos: 22
+Total prediction time: 0.006369 seconds
+Average prediction time per video: 0.000289 seconds
+Average prediction time per video: 0.289500 ms

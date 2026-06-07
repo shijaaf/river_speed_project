@@ -1,20 +1,21 @@
 from pathlib import Path
+
 import cv2
 import numpy as np
 import pandas as pd
-from tqdm import tqdm
+
+from src.video_feature_utils import iter_valid_videos, safe_fps
 
 
 VIDEO_START_SECONDS = {
     "1_Castor_Canada": 3.0,
-    "3_Castor_Canada": 3.0,
     "2_Castor_Canada": 3.0,
+    "3_Castor_Canada": 3.0,
     "AlpineStabilised": 3.0,
 }
 
 ROI_TOP_RATIO = 0.20
 ROI_BOTTOM_RATIO = 0.85
-
 ROI_LEFT_RATIO = 0.05
 ROI_RIGHT_RATIO = 0.95
 
@@ -28,86 +29,53 @@ LK_MAX_LEVEL = 3
 LK_CRITERIA = (
     cv2.TERM_CRITERIA_EPS | cv2.TERM_CRITERIA_COUNT,
     30,
-    0.01
+    0.01,
 )
 
 RESIZE_WIDTH = 640
 RESIZE_HEIGHT = 360
-FRAME_STEP = 1
 MAX_FRAMES = 300
 
 
 def apply_water_roi(frame):
-    """
-    Keep only the central water area.
-    """
-
     height, width = frame.shape
 
     top = int(height * ROI_TOP_RATIO)
     bottom = int(height * ROI_BOTTOM_RATIO)
-
     left = int(width * ROI_LEFT_RATIO)
     right = int(width * ROI_RIGHT_RATIO)
 
-    roi_frame = frame[top:bottom, left:right]
-
-    return roi_frame
+    return frame[top:bottom, left:right]
 
 
 def save_roi_preview(frame, dataset_name):
-    """
-    Save one ROI image for visual inspection.
-    """
+    output_dir = Path("outputs/roi_preview")
+    output_dir.mkdir(parents=True, exist_ok=True)
 
-    import os
-
-    output_dir = "outputs/roi_preview"
-
-    os.makedirs(
-        output_dir,
-        exist_ok=True
-    )
-
-    output_path = (
-        f"{output_dir}/{dataset_name}.png"
-    )
-
-    cv2.imwrite(
-        output_path,
-        frame
-    )
+    output_path = output_dir / f"{dataset_name}.png"
+    cv2.imwrite(str(output_path), frame)
 
 
 def preprocess_tracking_frame(frame):
-
     resized_frame = cv2.resize(
         frame,
-        (RESIZE_WIDTH, RESIZE_HEIGHT)
+        (RESIZE_WIDTH, RESIZE_HEIGHT),
     )
 
     gray_frame = cv2.cvtColor(
         resized_frame,
-        cv2.COLOR_BGR2GRAY
+        cv2.COLOR_BGR2GRAY,
     )
 
-    enhanced_frame = cv2.equalizeHist(
-        gray_frame
-    )
+    enhanced_frame = cv2.equalizeHist(gray_frame)
 
-    roi_frame = apply_water_roi(
-        enhanced_frame
-    )
-
-    return roi_frame
+    return apply_water_roi(enhanced_frame)
 
 
 def read_tracking_frames(video_path, dataset_name, fps, max_frames=MAX_FRAMES):
-    """
-    Read video frames for tracking and skip corrupted initial seconds if needed.
-    """
-
     frames = []
+
+    fps = safe_fps(fps)
 
     cap = cv2.VideoCapture(str(video_path))
 
@@ -115,7 +83,6 @@ def read_tracking_frames(video_path, dataset_name, fps, max_frames=MAX_FRAMES):
         raise ValueError(f"Could not open video: {video_path}")
 
     start_second = VIDEO_START_SECONDS.get(dataset_name, 0.0)
-
     start_frame = int(start_second * fps)
 
     cap.set(cv2.CAP_PROP_POS_FRAMES, start_frame)
@@ -126,9 +93,7 @@ def read_tracking_frames(video_path, dataset_name, fps, max_frames=MAX_FRAMES):
         if not ret:
             break
 
-        processed_frame = preprocess_tracking_frame(frame)
-
-        frames.append(processed_frame)
+        frames.append(preprocess_tracking_frame(frame))
 
         if len(frames) >= max_frames:
             break
@@ -139,26 +104,16 @@ def read_tracking_frames(video_path, dataset_name, fps, max_frames=MAX_FRAMES):
 
 
 def detect_initial_points(first_frame):
-    """
-    Detect strong trackable points in the first frame.
-    """
-
-    points = cv2.goodFeaturesToTrack(
+    return cv2.goodFeaturesToTrack(
         image=first_frame,
         maxCorners=MAX_CORNERS,
         qualityLevel=QUALITY_LEVEL,
         minDistance=MIN_DISTANCE,
-        blockSize=BLOCK_SIZE
+        blockSize=BLOCK_SIZE,
     )
-
-    return points
 
 
 def track_points_between_frames(prev_frame, next_frame, prev_points):
-    """
-    Track points from previous frame to next frame using Lucas-Kanade optical flow.
-    """
-
     next_points, status, error = cv2.calcOpticalFlowPyrLK(
         prevImg=prev_frame,
         nextImg=next_frame,
@@ -166,7 +121,7 @@ def track_points_between_frames(prev_frame, next_frame, prev_points):
         nextPts=None,
         winSize=LK_WIN_SIZE,
         maxLevel=LK_MAX_LEVEL,
-        criteria=LK_CRITERIA
+        criteria=LK_CRITERIA,
     )
 
     if next_points is None or status is None:
@@ -175,17 +130,12 @@ def track_points_between_frames(prev_frame, next_frame, prev_points):
     status = status.reshape(-1)
 
     good_prev_points = prev_points[status == 1]
-
     good_next_points = next_points[status == 1]
 
     return good_prev_points, good_next_points
 
 
 def calculate_displacement_features(prev_points, next_points, fps):
-    """
-    Calculate displacement-based features between two tracked point sets.
-    """
-
     displacement = next_points - prev_points
 
     dx = displacement[:, 0, 0]
@@ -193,13 +143,12 @@ def calculate_displacement_features(prev_points, next_points, fps):
 
     distance_px = np.sqrt(dx ** 2 + dy ** 2)
 
-    fps = fps if fps and fps > 0 else 1.0
+    fps = safe_fps(fps)
 
     speed_px_per_sec = distance_px * fps
-
     angle = np.arctan2(dy, dx)
 
-    features = {
+    return {
         "track_speed_mean": np.mean(speed_px_per_sec),
         "track_speed_median": np.median(speed_px_per_sec),
         "track_speed_std": np.std(speed_px_per_sec),
@@ -210,21 +159,17 @@ def calculate_displacement_features(prev_points, next_points, fps):
         "track_dy_mean": np.mean(dy),
         "track_dy_abs_mean": np.mean(np.abs(dy)),
         "track_angle_mean": np.mean(angle),
-        "valid_track_count": len(speed_px_per_sec)
+        "valid_track_count": len(speed_px_per_sec),
     }
-
-    return features
 
 
 def extract_klt_features_from_video(video_path, fps):
-    """
-    Extract KLT tracking features from one video.
-    """
+    dataset_name = Path(video_path).stem
 
     frames = read_tracking_frames(
         video_path=video_path,
-        dataset_name=Path(video_path).stem,
-        fps=fps
+        dataset_name=dataset_name,
+        fps=fps,
     )
 
     if len(frames) < 2:
@@ -240,30 +185,25 @@ def extract_klt_features_from_video(video_path, fps):
     prev_frame = frames[0]
     prev_points = initial_points
 
-    for i in range(1, len(frames)):
-        next_frame = frames[i]
-
+    for index in range(1, len(frames)):
         good_prev_points, good_next_points = track_points_between_frames(
             prev_frame=prev_frame,
-            next_frame=next_frame,
-            prev_points=prev_points
+            next_frame=frames[index],
+            prev_points=prev_points,
         )
 
-        if good_prev_points is None:
-            break
-
-        if len(good_prev_points) < 5:
+        if good_prev_points is None or len(good_prev_points) < 5:
             break
 
         frame_features = calculate_displacement_features(
             prev_points=good_prev_points,
             next_points=good_next_points,
-            fps=fps
+            fps=fps,
         )
 
         all_feature_rows.append(frame_features)
 
-        prev_frame = next_frame
+        prev_frame = frames[index]
         prev_points = good_next_points.reshape(-1, 1, 2)
 
     if len(all_feature_rows) == 0:
@@ -284,26 +224,17 @@ def extract_klt_features_from_video(video_path, fps):
 
 
 def build_klt_feature_dataset(overview_df):
-    """
-    Build a dataset of KLT tracking features for all videos.
-    """
-
     rows = []
 
-    for _, row in tqdm(
-        overview_df.iterrows(),
-        total=len(overview_df),
-        desc="Extracting KLT tracking features"
+    for row in iter_valid_videos(
+        overview_df=overview_df,
+        desc="Extracting KLT tracking features",
     ):
         dataset_name = row["dataset_name"]
 
-        if not row["video_exists"] or not row["is_readable"]:
-            print(f"Skipping invalid video: {dataset_name}")
-            continue
-
         features = extract_klt_features_from_video(
             video_path=row["video_path"],
-            fps=row["fps"]
+            fps=row["fps"],
         )
 
         if features is None:

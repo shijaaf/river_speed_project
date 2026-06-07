@@ -1,95 +1,56 @@
-import os
+import joblib
 import numpy as np
 import pandas as pd
-import joblib
-
-from sklearn.model_selection import LeaveOneOut, cross_val_predict
-from sklearn.feature_selection import SelectKBest, f_regression, VarianceThreshold
-from sklearn.preprocessing import StandardScaler
-from sklearn.pipeline import Pipeline
 
 from sklearn.ensemble import (
     ExtraTreesRegressor,
+    GradientBoostingRegressor,
     RandomForestRegressor,
-    GradientBoostingRegressor
 )
-
-from sklearn.svm import SVR
 from sklearn.linear_model import Ridge
+from sklearn.pipeline import Pipeline
+from sklearn.preprocessing import StandardScaler
+from sklearn.svm import SVR
 
-from sklearn.metrics import (
-    mean_absolute_error,
-    mean_squared_error,
-    r2_score
+from src.config import (
+    MODELS_DIR,
+    PHASE6_FEATURE_FILE,
+    PHASE9_ADVANCED_FEATURE_FILE,
+    PHASE13_DEEP_FEATURE_FILE,
+    RESULTS_DIR,
+)
+from src.modeling_utils import (
+    build_prediction_table,
+    calculate_metrics,
+    evaluate_models_loo,
+    load_merged_feature_dataset,
+    split_features_target,
+    variance_then_select_k_best,
 )
 
 
-PHASE6_FILE = "outputs/results/phase6_improved_features.csv"
-PHASE9_FILE = "outputs/results/phase9_advanced_motion_features.csv"
-PHASE13_FILE = "outputs/results/phase13_deep_features.csv"
-
-METRICS_FILE = "outputs/results/phase17_tuned_ensemble_metrics.csv"
-PREDICTIONS_FILE = "outputs/results/phase17_tuned_ensemble_predictions.xlsx"
-MODEL_FILE = "outputs/models/phase17_tuned_ensemble.pkl"
-
-
-def calculate_metrics(y_true, y_pred):
-    mae = mean_absolute_error(y_true, y_pred)
-    mse = mean_squared_error(y_true, y_pred)
-    rmse = np.sqrt(mse)
-    r2 = r2_score(y_true, y_pred)
-    mape = np.mean(np.abs((y_true - y_pred) / y_true)) * 100
-
-    return {
-        "MAE": mae,
-        "MSE": mse,
-        "RMSE": rmse,
-        "R2": r2,
-        "MAPE": mape
-    }
+METRICS_FILE = RESULTS_DIR / "phase17_tuned_ensemble_metrics.csv"
+PREDICTIONS_FILE = RESULTS_DIR / "phase17_tuned_ensemble_predictions.xlsx"
+MODEL_FILE = MODELS_DIR / "phase17_tuned_ensemble.pkl"
 
 
 def load_fused_dataset():
-    phase6_df = pd.read_csv(PHASE6_FILE)
-    phase9_df = pd.read_csv(PHASE9_FILE)
-    phase13_df = pd.read_csv(PHASE13_FILE)
-
-    phase9_df = phase9_df.drop(columns=["real_speed"], errors="ignore")
-    phase13_df = phase13_df.drop(columns=["real_speed"], errors="ignore")
-
-    df = pd.merge(phase6_df, phase9_df, on="dataset_name", how="inner")
-    df = pd.merge(df, phase13_df, on="dataset_name", how="inner")
-
-    df["real_speed"] = pd.to_numeric(df["real_speed"], errors="coerce")
-    df = df.dropna(subset=["real_speed"]).reset_index(drop=True)
-
-    return df
-
-
-def split_data(df):
-    dataset_names = df["dataset_name"]
-
-    y = df["real_speed"]
-
-    X = df.drop(
-        columns=[
-            "dataset_name",
-            "real_speed"
-        ]
-    )
-
-    return X, y, dataset_names
+    return load_merged_feature_dataset([
+        PHASE6_FEATURE_FILE,
+        PHASE9_ADVANCED_FEATURE_FILE,
+        PHASE13_DEEP_FEATURE_FILE,
+    ])
 
 
 def create_models():
-    models = {
+    return {
         "ExtraTrees_A": ExtraTreesRegressor(
             n_estimators=1000,
             max_depth=3,
             min_samples_leaf=2,
             min_samples_split=2,
             max_features="sqrt",
-            random_state=42
+            random_state=42,
         ),
 
         "ExtraTrees_B": ExtraTreesRegressor(
@@ -98,7 +59,7 @@ def create_models():
             min_samples_leaf=2,
             min_samples_split=3,
             max_features=0.5,
-            random_state=7
+            random_state=7,
         ),
 
         "ExtraTrees_C": ExtraTreesRegressor(
@@ -107,7 +68,7 @@ def create_models():
             min_samples_leaf=2,
             min_samples_split=2,
             max_features=0.7,
-            random_state=21
+            random_state=21,
         ),
 
         "RandomForest": RandomForestRegressor(
@@ -115,7 +76,7 @@ def create_models():
             max_depth=4,
             min_samples_leaf=2,
             max_features="sqrt",
-            random_state=42
+            random_state=42,
         ),
 
         "GradientBoosting": GradientBoostingRegressor(
@@ -123,7 +84,7 @@ def create_models():
             learning_rate=0.025,
             max_depth=2,
             subsample=0.8,
-            random_state=42
+            random_state=42,
         ),
 
         "SVR": Pipeline([
@@ -131,80 +92,15 @@ def create_models():
             ("model", SVR(
                 C=5,
                 epsilon=0.05,
-                kernel="rbf"
-            ))
+                kernel="rbf",
+            )),
         ]),
 
         "Ridge": Pipeline([
             ("scaler", StandardScaler()),
-            ("model", Ridge(alpha=5.0))
-        ])
+            ("model", Ridge(alpha=5.0)),
+        ]),
     }
-
-    return models
-
-
-def prepare_features(X, y, k=20):
-    variance_filter = VarianceThreshold(
-        threshold=1e-8
-    )
-
-    X_var = variance_filter.fit_transform(X)
-
-    remaining_features = X.columns[
-        variance_filter.get_support()
-    ]
-
-    selector = SelectKBest(
-        score_func=f_regression,
-        k=min(k, X_var.shape[1])
-    )
-
-    X_selected = selector.fit_transform(
-        X_var,
-        y
-    )
-
-    selected_features = remaining_features[
-        selector.get_support()
-    ]
-
-    print("Selected Features:")
-    for feature in selected_features:
-        print(feature)
-
-    return X_selected, variance_filter, selector, selected_features
-
-
-def evaluate_models(X, y, models):
-    loo = LeaveOneOut()
-
-    results = {}
-
-    for model_name, model in models.items():
-        predictions = cross_val_predict(
-            estimator=model,
-            X=X,
-            y=y,
-            cv=loo
-        )
-
-        metrics = calculate_metrics(
-            y_true=y,
-            y_pred=predictions
-        )
-
-        results[model_name] = {
-            "predictions": predictions,
-            "metrics": metrics
-        }
-
-        print()
-        print(f"{model_name}:")
-        for metric_name, value in metrics.items():
-            print(f"{metric_name}: {value:.4f}")
-
-    return results
 
 
 def build_weighted_ensemble(results):
@@ -220,7 +116,6 @@ def build_weighted_ensemble(results):
 
         model_names.append(model_name)
         prediction_list.append(result["predictions"])
-
         weights.append(1.0 / mae)
 
     prediction_matrix = np.vstack(prediction_list)
@@ -231,31 +126,44 @@ def build_weighted_ensemble(results):
     ensemble_predictions = np.average(
         prediction_matrix,
         axis=0,
-        weights=weights
+        weights=weights,
     )
 
     return ensemble_predictions, model_names, weights
 
 
+def build_metrics_rows(results, ensemble_metrics):
+    rows = []
+
+    for model_name, result in results.items():
+        row = {"model": model_name}
+        row.update(result["metrics"])
+        rows.append(row)
+
+    ensemble_row = {"model": "WeightedEnsemble"}
+    ensemble_row.update(ensemble_metrics)
+    rows.append(ensemble_row)
+
+    return rows
+
+
 def save_outputs(metrics_rows, prediction_df, trained_package):
-    os.makedirs("outputs/results", exist_ok=True)
-    os.makedirs("outputs/models", exist_ok=True)
+    RESULTS_DIR.mkdir(parents=True, exist_ok=True)
+    MODELS_DIR.mkdir(parents=True, exist_ok=True)
 
-    metrics_df = pd.DataFrame(metrics_rows)
-
-    metrics_df.to_csv(
+    pd.DataFrame(metrics_rows).to_csv(
         METRICS_FILE,
-        index=False
+        index=False,
     )
 
     prediction_df.to_excel(
         PREDICTIONS_FILE,
-        index=False
+        index=False,
     )
 
     joblib.dump(
         trained_package,
-        MODEL_FILE
+        MODEL_FILE,
     )
 
     print()
@@ -270,29 +178,36 @@ def main():
     print(f"Training samples: {len(df)}")
     print(f"Total columns: {len(df.columns)}")
 
-    X, y, dataset_names = split_data(df)
+    X, y, dataset_names = split_features_target(df)
 
-    X_selected, variance_filter, selector, selected_features = prepare_features(
+    (
+        X_selected,
+        variance_filter,
+        selector,
+        selected_features,
+    ) = variance_then_select_k_best(
         X=X,
         y=y,
-        k=20
+        k=20,
     )
 
     models = create_models()
 
-    results = evaluate_models(
+    results = evaluate_models_loo(
         X=X_selected,
         y=y,
-        models=models
+        models=models,
     )
 
-    ensemble_predictions, ensemble_model_names, ensemble_weights = build_weighted_ensemble(
-        results
-    )
+    (
+        ensemble_predictions,
+        ensemble_model_names,
+        ensemble_weights,
+    ) = build_weighted_ensemble(results)
 
     ensemble_metrics = calculate_metrics(
         y_true=y,
-        y_pred=ensemble_predictions
+        y_pred=ensemble_predictions,
     )
 
     print()
@@ -300,31 +215,20 @@ def main():
     for metric_name, value in ensemble_metrics.items():
         print(f"{metric_name}: {value:.4f}")
 
-    metrics_rows = []
+    metrics_rows = build_metrics_rows(
+        results=results,
+        ensemble_metrics=ensemble_metrics,
+    )
 
-    for model_name, result in results.items():
-        row = {
-            "model": model_name
-        }
-        row.update(result["metrics"])
-        metrics_rows.append(row)
-
-    ensemble_row = {
-        "model": "WeightedEnsemble"
-    }
-    ensemble_row.update(ensemble_metrics)
-    metrics_rows.append(ensemble_row)
-
-    prediction_df = pd.DataFrame({
-        "نام دیتاست": dataset_names,
-        "مقدار واقعی": y,
-        "مقدار پیشبینی شده": ensemble_predictions,
-        "میزان خطا": np.abs(y - ensemble_predictions)
-    })
+    prediction_df = build_prediction_table(
+        dataset_names=dataset_names,
+        y_true=y,
+        y_pred=ensemble_predictions,
+    )
 
     final_models = create_models()
 
-    for model_name, model in final_models.items():
+    for model in final_models.values():
         model.fit(X_selected, y)
 
     trained_package = {
@@ -333,15 +237,11 @@ def main():
         "selector": selector,
         "selected_features": list(selected_features),
         "ensemble_model_names": ensemble_model_names,
-        "ensemble_weights": ensemble_weights
+        "ensemble_weights": ensemble_weights,
     }
 
     save_outputs(
         metrics_rows=metrics_rows,
         prediction_df=prediction_df,
-        trained_package=trained_package
+        trained_package=trained_package,
     )
-
-
-if __name__ == "__main__":
-    main()

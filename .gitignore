@@ -4,7 +4,6 @@ __pycache__/
 
 data/videos/
 outputs/frames/
-outputs/logs/
 outputs/results/
 outputs/models/
 

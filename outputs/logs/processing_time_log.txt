@@ -1,0 +1,16 @@
+2026-06-08 00:01:11 | phase1_dataset_overview | 2.36 seconds | 0.04 minutes
+2026-06-08 00:03:52 | phase2_preprocess | 119.37 seconds | 1.99 minutes
+2026-06-08 00:06:29 | phase3_optical_flow_features | 156.55 seconds | 2.61 minutes
+2026-06-08 00:06:39 | phase4_train_ml_model | 10.17 seconds | 0.17 minutes
+2026-06-08 00:06:49 | phase5_train_dl_model | 10.25 seconds | 0.17 minutes
+2026-06-08 00:10:01 | phase6_improve_training | 191.89 seconds | 3.20 minutes
+2026-06-08 00:11:09 | phase7_klt_tracking_features | 67.92 seconds | 1.13 minutes
+2026-06-08 00:21:56 | phase8_train_klt_models | 20.70 seconds | 0.34 minutes
+2026-06-08 00:24:31 | phase9_advanced_motion_features | 154.39 seconds | 2.57 minutes
+2026-06-08 00:25:50 | phase10_train_advanced_motion_model | 18.93 seconds | 0.32 minutes
+2026-06-08 00:26:14 | phase11_train_hybrid_model | 23.82 seconds | 0.40 minutes
+2026-06-08 00:28:25 | phase13_deep_feature_extraction | 130.97 seconds | 2.18 minutes
+2026-06-08 00:28:50 | phase14_train_deep_feature_model | 24.51 seconds | 0.41 minutes
+2026-06-08 00:29:51 | phase15_train_tinycnn_model | 61.18 seconds | 1.02 minutes
+2026-06-08 00:33:37 | phase16_train_cnnlstm_model | 225.85 seconds | 3.76 minutes
+2026-06-08 00:34:47 | phase17_train_tuned_ensemble_model | 70.10 seconds | 1.17 minutes
